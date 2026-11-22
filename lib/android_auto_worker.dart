@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_carplay/aa_models/sectioned_item/sectioned_item_template.dart';
 import 'package:flutter_carplay/flutter_carplay.dart';
 
 import 'controllers/android_auto_controller.dart';
@@ -14,12 +16,15 @@ class FlutterAndroidAuto {
   late final StreamSubscription<dynamic>? _eventBroadcast;
 
   static String _connectionStatus = ConnectionStatusTypes.unknown.name;
+  static String _lifecycleState = LifeCycleStateTypes.unknown.name;
 
   /// The size used when rasterizing Flutter asset SVGs referenced by image
   /// fields before they are sent to the native side.
   static int svgRasterSize = defaultSvgRasterSize;
 
   Function(ConnectionStatusTypes status)? _onAndroidAutoConnectionChange;
+  Function(String elementId)? _onAndroidAutoBackButtonPressed;
+  Function(LifeCycleStateTypes state)? _onAndroidAutoLifecycleStateChange;
 
   FlutterAndroidAuto() {
     if (defaultTargetPlatform != TargetPlatform.android) return;
@@ -71,9 +76,9 @@ class FlutterAndroidAuto {
 
             case FAAChannelTypes.onScreenBackButtonPressed:
               FlutterAndroidAutoController.templateHistory.removeWhere(
-                (AATemplate item) =>
-                    item.uniqueId == event['data']['elementId'],
+                (AATemplate item) => item.uniqueId == event['data']['elementId'],
               );
+              _onAndroidAutoBackButtonPressed?.call(event['data']['elementId']);
               break;
 
             case FAAChannelTypes.onAlertActionPressed:
@@ -99,11 +104,41 @@ class FlutterAndroidAuto {
                 event['data']['elementId'],
               );
               break;
-
+    
+            case FAAChannelTypes.onListItemActionPressed:
+              await _androidAutoController.processFAAListItemActionPressed(
+                event['data']['elementId'],
+                event['data']['callbackId'],
+              );
+              break;
+    
+            case FAAChannelTypes.onTemplateFABPressed:
+              await _androidAutoController.processFAAFabIconPressed(
+                event['data']['elementId'],
+              );
+              break;
+    
+            case FAAChannelTypes.onHeaderActionPressed:
+              await _androidAutoController.processFAAHeaderActionPressed(
+                event['data']['elementId'],
+              );
+              break;
+    
+            case FAAChannelTypes.onAndroidAutoLifecycleChange:
+              final LifeCycleStateTypes lifecycleState =
+                EnumUtils.enumFromString(
+                  LifeCycleStateTypes.values,
+                  event['data']['state'],
+                );
+              _lifecycleState = lifecycleState.name;
+              _onAndroidAutoLifecycleStateChange?.call(lifecycleState);
+              break;
+    
+    
             default:
               break;
           }
-        });
+    });
   }
 
   void closeConnection() {
@@ -129,13 +164,14 @@ class FlutterAndroidAuto {
   }
 
   static String get connectionStatus => _connectionStatus;
+  static String get lifecycleState => _lifecycleState;
 
   static Future<void> setRootTemplate({required AATemplate template}) async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.setRootTemplate, {
-          'template': template.toJson(),
-          'runtimeType': _getAARuntimeTypeString(template),
-        });
+        .flutterToNativeModule<bool>(FAAChannelTypes.setRootTemplate, {
+      'template': template.toJson(),
+      'runtimeType': _getAARuntimeTypeString(template),
+    });
 
     if (isCompleted == true) {
       if (FlutterAndroidAutoController.templateHistory.isEmpty) {
@@ -160,9 +196,9 @@ class FlutterAndroidAuto {
     required AAPaneTemplate template,
   }) async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.updatePaneTemplate, {
-          'template': template.toJson(),
-        });
+        .flutterToNativeModule<bool>(FAAChannelTypes.updatePaneTemplate, {
+      'template': template.toJson(),
+    });
 
     if (isCompleted == true) {
       final int index = FlutterAndroidAutoController.templateHistory.indexWhere(
@@ -177,7 +213,7 @@ class FlutterAndroidAuto {
   }
 
   Future<void> forceUpdateRootTemplate() {
-    return _androidAutoController.flutterToNativeModule(
+    return _androidAutoController.flutterToNativeModule<bool>(
       FAAChannelTypes.forceUpdateRootTemplate,
     );
   }
@@ -187,9 +223,9 @@ class FlutterAndroidAuto {
 
   static Future<void> showAlert({required AAAlertTemplate template}) async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.setAlert, {
-          'template': template.toJson(),
-        });
+        .flutterToNativeModule<bool>(FAAChannelTypes.setAlert, {
+      'template': template.toJson(),
+    });
 
     if (isCompleted == true) {
       FlutterAndroidAutoController.currentPresentTemplate = template;
@@ -200,17 +236,17 @@ class FlutterAndroidAuto {
   static Future<bool> popModal() async {
     FlutterAndroidAutoController.currentPresentTemplate = null;
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.closePresent);
+        .flutterToNativeModule<bool>(FAAChannelTypes.closePresent);
     return isCompleted ?? false;
   }
 
   static Future<void> updateTabBarTemplates({
     required AATabBarTemplate template,
   }) async {
-    await _androidAutoController.flutterToNativeModule(
-      FAAChannelTypes.updateTabBarTemplates,
-      {'template': template.toJson()},
-    );
+    await _androidAutoController
+        .flutterToNativeModule<bool>(FAAChannelTypes.updateTabBarTemplates, {
+      'template': template.toJson(),
+    });
 
     final index = FlutterAndroidAutoController.templateHistory.indexWhere(
       (item) => item.uniqueId == template.uniqueId,
@@ -222,22 +258,22 @@ class FlutterAndroidAuto {
 
   static Future<bool> pop() async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.popTemplate);
+        .flutterToNativeModule<bool>(FAAChannelTypes.popTemplate);
     return isCompleted ?? false;
   }
 
   static Future<bool> popToRoot() async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.popToRootTemplate);
+        .flutterToNativeModule<bool>(FAAChannelTypes.popToRootTemplate);
     return isCompleted ?? false;
   }
 
   static Future<bool> push({required AATemplate template}) async {
     final bool? isCompleted = await _androidAutoController
-        .flutterToNativeModule(FAAChannelTypes.pushTemplate, <String, dynamic>{
-          'template': template.toJson(),
-          'runtimeType': _getAARuntimeTypeString(template),
-        });
+        .flutterToNativeModule<bool>(FAAChannelTypes.pushTemplate, <String, dynamic>{
+      'template': template.toJson(),
+      'runtimeType': _getAARuntimeTypeString(template),
+    });
     if (isCompleted == true) {
       FlutterAndroidAutoController.templateHistory.add(template);
     }
@@ -245,6 +281,42 @@ class FlutterAndroidAuto {
   }
 
   static Future<bool> showSharedNowPlaying() async => false;
+
+
+  static Future<bool> showToast(String text) async {
+    final bool? isCompleted = await _androidAutoController
+        .flutterToNativeModule<bool>(FAAChannelTypes.showToast, <String, dynamic>{
+          'text': text,
+    });
+    return isCompleted ?? false;
+  }
+
+  void addListenerOnBackButtonPressed(
+      Function(String elementId) onAndroidAutoBackButtonPressed,
+      ) {
+    _onAndroidAutoBackButtonPressed = onAndroidAutoBackButtonPressed;
+  }
+
+  void removeListenerOnBackButtonPressed() {
+    _onAndroidAutoBackButtonPressed = null;
+  }
+
+  static Future<int> getContentLimit() async {
+    final limit = await _androidAutoController
+        .flutterToNativeModule<int>(FAAChannelTypes.getContentLimit);
+
+    return limit ?? 10;
+  }
+
+  void addListenerOnLifecycleStateChange(
+      Function(LifeCycleStateTypes state) onAndroidAutoLifecycleStateChange,
+      ) {
+    _onAndroidAutoLifecycleStateChange = onAndroidAutoLifecycleStateChange;
+  }
+
+  void removeListenerOnLifecycleStateChange() {
+    _onAndroidAutoLifecycleStateChange = null;
+  }
 
   static String _getAARuntimeTypeString(AATemplate template) {
     if (template is AAListTemplate) return 'FAAListTemplate';
@@ -254,6 +326,7 @@ class FlutterAndroidAuto {
     if (template is AAMessageTemplate) return 'FAAMessageTemplate';
     if (template is AALongMessageTemplate) return 'FAALongMessageTemplate';
     if (template is AAAlertTemplate) return 'FAAAlertTemplate';
+    if (template is AASectionedItemTemplate) return 'FAASectionedItemTemplate';
     return 'FAA${template.runtimeType}';
   }
 }

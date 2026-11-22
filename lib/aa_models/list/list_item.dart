@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_carplay/aa_models/list/list_spannable.dart';
 import 'package:flutter_carplay/models/common/image_tint.dart';
 import 'package:uuid/uuid.dart';
 
@@ -14,6 +16,21 @@ class AAToggle {
     'isChecked': isChecked,
     'isEnabled': isEnabled,
     'onCheckedChange': onCheckedChange != null ? true : false,
+  };
+}
+
+class AAListItemAction {
+  final String id;
+  final String? image;
+  final String? text;
+  final FutureOr<void> Function()? onPress;
+
+  AAListItemAction({required this.id, this.image,  this.onPress, this.text});
+
+  Map<String, dynamic> toJson() => {
+    'image': image,
+    'text': text,
+    'callbackId': id,
   };
 }
 
@@ -43,6 +60,14 @@ class AAListItem {
 
   final bool? isBrowsable;
   final AAToggle? toggle;
+
+  /// Text of a number displayed at the end off the row
+  final int? numericDecoration;
+  
+  final List<AAListItemAction> trailingActionsButtons;
+
+  final List<AAListItemSpannable> subtitleSpans;
+
   final FutureOr<void> Function(Function() complete, AAListItem self)? onPress;
 
   AAListItem({
@@ -57,6 +82,9 @@ class AAListItem {
     this.isBrowsable,
     this.toggle,
     this.onPress,
+    this.numericDecoration,
+    this.trailingActionsButtons = const [],
+    this.subtitleSpans = const [],
     String? id,
   }) : imageUrl = imageUrl ?? image,
        assert(
@@ -76,16 +104,19 @@ class AAListItem {
   String get uniqueId => _elementId;
 
   Map<String, dynamic> toJson() => {
-    '_elementId': _elementId,
-    'title': title,
-    'subtitle': subtitle,
-    'imageUrl': imageUrl,
-    'imageTint': imageTint?.toJson(),
-    'trailingImage': trailingImage,
-    'trailingImageTint': trailingImageTint?.toJson(),
-    'loadingMessage': loadingMessage,
-    'isBrowsable': isBrowsable,
-    'toggle': toggle?.toJson(),
-    'onPress': onPress != null ? true : false,
-  };
+        '_elementId': _elementId,
+        'title': title,
+        'subtitle': subtitle,
+        'imageUrl': imageUrl,
+        'imageTint': imageTint?.toJson(),
+        'trailingImage': trailingImage,
+        'trailingImageTint': trailingImageTint?.toJson(),
+        'loadingMessage': loadingMessage,
+        'isBrowsable': isBrowsable,
+        'toggle': toggle?.toJson(),
+        'numericDecoration': numericDecoration,
+        'trailingActionsButtons': trailingActionsButtons.map((item) => item.toJson()).toList(),
+        'onPress': onPress != null ? true : false,
+        'subtitleSpans': subtitleSpans.map((item) => item.toJson()).toList(),
+      };
 }

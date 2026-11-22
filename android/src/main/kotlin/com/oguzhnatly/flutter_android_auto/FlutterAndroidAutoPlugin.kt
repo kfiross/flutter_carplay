@@ -1,14 +1,24 @@
 package com.oguzhnatly.flutter_android_auto
 
+import android.text.SpannableString
+import android.util.Log
+import androidx.annotation.OptIn
 import androidx.car.app.CarContext
+import androidx.car.app.CarToast
 import androidx.car.app.Screen
 import androidx.car.app.ScreenManager
+import androidx.car.app.annotations.ExperimentalCarApi
+import androidx.car.app.constraints.ConstraintManager
+import androidx.car.app.media.model.MediaPlaybackTemplate
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.CarText
+import androidx.car.app.model.ForegroundCarColorSpan
 import androidx.car.app.model.GridItem
+import androidx.car.app.model.GridSection
 import androidx.car.app.model.GridTemplate
+import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.LongMessageTemplate
@@ -16,7 +26,9 @@ import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Pane
 import androidx.car.app.model.PaneTemplate
 import androidx.car.app.model.Row
+import androidx.car.app.model.RowSection
 import androidx.car.app.model.SectionedItemList
+import androidx.car.app.model.SectionedItemTemplate
 import androidx.car.app.model.Tab
 import androidx.car.app.model.TabContents
 import androidx.car.app.model.TabTemplate
@@ -33,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlin.collections.mapOf
 
 class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -67,6 +80,13 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
                 data = mapOf("status" to status.name)
             )
         }
+
+        fun onAndroidAutoLifecycleChange(state: FAALifecycleStateTypes) {
+            sendEvent(
+                type = FAAChannelTypes.onAndroidAutoLifecycleChange.name,
+                data = mapOf("state" to state.name)
+            )
+        }
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -99,6 +119,8 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
                     FAAChannelTypes.setAlert.name -> setAlert(call, result)
                     FAAChannelTypes.closePresent.name -> closePresent(call, result)
                     FAAChannelTypes.updateTabBarTemplates.name -> updateTabBarTemplates(call, result)
+                    FAAChannelTypes.showToast.name -> showToast(call, result)
+                    FAAChannelTypes.getContentLimit.name -> getContentLimit(call, result)
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) {
@@ -226,9 +248,13 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
             if (action.style == "destructive") {
                 actionBuilder.setBackgroundColor(CarColor.RED)
             }
+            if (action.style == "primary") {
+                actionBuilder.setFlags(Action.FLAG_PRIMARY)
+            }
 
             builder.addAction(actionBuilder.build())
         }
+        if (alert.addBackButton) builder.setHeaderAction(Action.BACK)
         return builder.build()
     }
 
@@ -481,14 +507,20 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
         buildTemplateForType(runtimeType, data, addBackButton, owningScreen)
     }
 
+    @OptIn(ExperimentalCarApi::class)
     private suspend fun buildTemplateForType(
         runtimeType: String,
         data: Map<String, Any?>,
         addBackButton: Boolean = true,
         owningScreen: Screen? = null,
+        result: MethodChannel.Result? = null,
     ): Template = when (runtimeType) {
-        "FAAListTemplate" -> getListTemplate(data, addBackButton, owningScreen)
-        "FAAGridTemplate" -> getGridTemplate(data, addBackButton, owningScreen)
+        // OLD APIs
+//        "FAAListTemplate" -> getListTemplate(data, addBackButton, owningScreen)
+//        "FAAGridTemplate" -> getGridTemplate(data, addBackButton, owningScreen)
+        "FAAListTemplate" -> getListAsSectionedItemTemplate(data, addBackButton, owningScreen)
+        "FAAGridTemplate" -> getGridAsSectionedItemTemplate(data, addBackButton, owningScreen)
+
         "FAATabBarTemplate" -> {
             val tabBarTemplate = FAATabBarTemplate.fromJson(data)
             currentTabBarData = tabBarTemplate
@@ -501,6 +533,8 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
         "FAAPaneTemplate" -> getPaneTemplate(data, addBackButton)
         "FAAMessageTemplate" -> getMessageTemplate(data, addBackButton)
         "FAALongMessageTemplate" -> getLongMessageTemplate(data, addBackButton)
+        "FAASectionedItemTemplate" -> getSectionedItemTemplate(data, addBackButton, owningScreen)
+        "FAAMediaPlaybackTemplate" -> getMediaPlaybackTemplate(data, addBackButton, owningScreen)
         else -> throw IllegalArgumentException("Template type $runtimeType is not supported")
     }
 
@@ -749,6 +783,23 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
         }
 
         if (addBackButton) builder.setHeaderAction(Action.BACK)
+
+        if(template.action != null) {
+            val actionBuilder = Action.Builder()
+//                .setTitle(action.title)
+                .setIcon(CarIcon.COMPOSE_MESSAGE)
+                .setBackgroundColor(CarColor.BLUE)
+                .setOnClickListener {
+                    sendEvent(
+                        type = FAAChannelTypes.onTemplateFABPressed.name,
+                        data = mapOf("elementId" to template.action.elementId!!)
+                    )
+                }
+            val action = actionBuilder.build()
+
+            builder.addAction(action)
+        }
+
         return builder.build()
     }
 
@@ -798,6 +849,36 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
         return itemListBuilder.build()
     }
 
+
+    private suspend fun createRowsListFromSection(
+        carContext: CarContext?,
+        section: FAAListSection,
+        templateElementId: String,
+        runtimeType: String,
+        owningScreen: Screen?,
+    ): List<Row> {
+        val list = mutableListOf<Row>()
+
+        for (item in section.items) {
+            list.add(
+                createRowFromItem(
+                    carContext,
+                    item,
+                    templateElementId,
+                    runtimeType,
+                    owningScreen,
+                    enableOnClick = true
+                )
+            )
+        }
+
+        // TODO: needs to implment back selection of items
+
+
+        return list
+    }
+
+
     private suspend fun createRowFromItem(
         carContext: CarContext?,
         item: FAAListItem,
@@ -806,8 +887,23 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
         owningScreen: Screen?,
         enableOnClick: Boolean = true,
     ): Row {
-        val rowBuilder = Row.Builder().setTitle(CarText.create(item.title))
-        item.subtitle?.let { rowBuilder.addText(CarText.create(it)) }
+        val rowBuilder = Row.Builder().setTitle(
+            CarText.create(item.title)
+        )
+        item.subtitle?.let {
+            val spannableSubtitle = SpannableString(it)
+
+            for (span in item.subtitleSpans) {
+                spannableSubtitle.setSpan(
+                    ForegroundCarColorSpan.create(span.color?.toCarColor() ?: CarColor.SECONDARY),
+                    span.start ?: 0,
+                    span.end ?: spannableSubtitle.length,
+                    SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+
+            rowBuilder.addText(CarText.create(spannableSubtitle))
+        }
 
         val imageIcon = makeCarIconFromBytes(item.imageData, item.imageTint)
             ?: if (carContext != null && item.imageUrl != null) {
@@ -855,14 +951,58 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
                 )
             }
         }
+        if(item.numericDecoration != 0) {
+            rowBuilder.setNumericDecoration(item.numericDecoration);
+        }
+        if(item.trailingActionsButtons.isNotEmpty()){
+            for (btn in item.trailingActionsButtons){
+                val actionIcon = if (carContext != null && btn.image != null) {
+                        resolveCarIcon(carContext, null, btn.image, null)
+                    } else null
+
+                val action = Action.Builder()
+
+                if(actionIcon == null) {
+                    if (btn.text != null){
+                        action.setTitle(btn.text)
+                    }
+                    else {
+                        action.setTitle("Action")
+                    }
+                }
+//                if(actionIcon == null){
+//                    action.setTitle("Action")
+//                }
+                else {
+                    action.setIcon(actionIcon)
+                }
+
+
+                action.setOnClickListener {
+                    sendEvent(
+                        type = FAAChannelTypes.onListItemActionPressed.name,
+                        data = mapOf(
+                            "elementId" to item.elementId,
+                            "callbackId" to btn.callbackId
+                        ) as Map<String, Any>
+                    )
+                }
+                rowBuilder.addAction(action.build())
+            }
+        }
+
         return rowBuilder.build()
     }
 
+    @ExperimentalCarApi
     private suspend fun getGridTemplate(
         data: Map<String, Any?>,
         addBackButton: Boolean = true,
         owningScreen: Screen? = null,
     ): Template {
+        if(data["useNew"] == true){
+            return getGridAsSectionedItemTemplate(data, addBackButton, owningScreen)
+        }
         val carContext = AndroidAutoService.session?.carContext
         val template = FAAGridTemplate.fromJson(data)
         val builder = GridTemplate.Builder().setTitle(template.title)
@@ -963,6 +1103,292 @@ class FlutterAndroidAutoPlugin : FlutterPlugin, EventChannel.StreamHandler {
                 .build()
         }
     }
+
+    private fun showToast(call: MethodCall, result: MethodChannel.Result) {
+        val text = call.argument<String?>("text")
+        if (text == null) {
+            result.error("Missing text", "text argument is required", null)
+            return
+        }
+        val carContext = AndroidAutoService.session?.carContext
+
+        if(carContext == null){
+            result.success(false)
+            return
+        }
+
+        pluginScope.launch {
+            CarToast.makeText(
+                carContext,
+                text,
+                CarToast.LENGTH_SHORT
+            ).show()
+            result.success(true)
+        }
+    }
+
+    private fun getContentLimit(call: MethodCall, result: MethodChannel.Result) {
+
+            val carContext = AndroidAutoService.session?.carContext
+
+            if(carContext == null){
+                result.error("Missing car context", "carContext in null", null)
+                return
+            }
+
+        val constraintManager = carContext.getCarService(ConstraintManager::class.java)
+        val maxAllowedItems = constraintManager.getContentLimit(ConstraintManager.CONTENT_LIMIT_TYPE_LIST)
+
+        return result.success(maxAllowedItems)
+    }
+
+
+    @ExperimentalCarApi
+    private suspend fun getSectionedItemTemplate(
+        data: Map<String, Any?>,
+        addBackButton: Boolean = true,
+        owningScreen: Screen? = null,
+    ): Template {
+        val carContext = AndroidAutoService.session?.carContext
+        val template = FAASectionedItemTemplate.fromJson(data)
+
+        val builder = SectionedItemTemplate.Builder()
+        val emptyMessage: String? = template.emptyViewTitleVariants.firstOrNull()
+        val isEmpty = template.sections.isEmpty() || template.sections.all { it.items.isEmpty() }
+
+        if (isEmpty) {
+            if (emptyMessage != null) {
+                builder.setLoading(false)
+                val section = RowSection.Builder().setNoItemsMessage(emptyMessage).build()
+                builder.addSection(section)
+            } else {
+                builder.setLoading(true)
+            }
+        } else {
+            builder.setLoading(false)
+            val isSingleList = template.sections.size == 1 && template.sections.first().title.isEmpty()
+            if (isSingleList) {
+                val itemList = createRowsListFromSection(carContext, template.sections.first(), template.elementId, "FAAListTemplate", owningScreen)
+                val section = RowSection.Builder().setItems(itemList).build()
+                builder.addSection(section)
+            } else {
+                for (section in template.sections) {
+                    val itemList = createRowsListFromSection(carContext, section, template.elementId, "FAAListTemplate", owningScreen)
+                    val templateSection = RowSection.Builder()
+                    templateSection.setTitle(section.title)
+                    templateSection.setItems(itemList).build()
+                    builder.addSection(templateSection.build())
+                }
+            }
+        }
+
+        val headerBuilder = Header.Builder()
+        headerBuilder.setTitle(template.title)
+
+        if (addBackButton) headerBuilder.setStartHeaderAction(Action.BACK)
+        val header = headerBuilder.build()
+
+        if(template.isAlphabeticalIndexingAllowed == true){
+            builder.setAlphabeticalIndexingAllowed(true)
+        }
+        for (action in template.actions) {
+            val actionBuilder = Action.Builder()
+                .setBackgroundColor(CarColor.DEFAULT)
+                .setIcon(CarIcon.COMPOSE_MESSAGE)
+
+
+            val imageIcon = if (carContext != null && action.imageUrl != null) {
+                    resolveCarIcon(carContext, null, action.imageUrl, action.imageTint)
+                } else null
+
+            if(imageIcon != null) actionBuilder.setIcon(imageIcon)
+            if(action.imageTint != null) {
+                actionBuilder.setBackgroundColor(action.imageTint.toCarColor())
+            }
+
+
+            actionBuilder.setOnClickListener {
+                sendEvent(
+                    type = FAAChannelTypes.onTemplateFABPressed.name,
+                    data = mapOf("elementId" to action.elementId!!)
+                )
+            }
+
+            val action = actionBuilder.build()
+            builder.addAction(action)
+        }
+
+
+        builder.setHeader(header)
+
+
+        return builder.build()
+    }
+
+
+    /** NEW API!! ** /
+     */
+    @ExperimentalCarApi
+    private suspend fun getListAsSectionedItemTemplate(
+        data: Map<String, Any?>,
+        addBackButton: Boolean = true,
+        owningScreen: Screen? = null,
+    ): Template {
+        val carContext = AndroidAutoService.session?.carContext
+        val template = FAAListTemplate.fromJson(data)
+
+        val builder = SectionedItemTemplate.Builder()
+        val emptyMessage: String? = template.emptyViewTitleVariants.firstOrNull()
+        val isEmpty = template.sections.isEmpty() || template.sections.all { it.items.isEmpty() }
+
+        if (isEmpty) {
+            if (emptyMessage != null) {
+                builder.setLoading(false)
+                val section = RowSection.Builder().setNoItemsMessage(emptyMessage).build()
+                builder.addSection(section)
+            } else {
+                builder.setLoading(true)
+            }
+        } else {
+            builder.setLoading(false)
+            val isSingleList = template.sections.size == 1 && template.sections.first().title.isEmpty()
+            if (isSingleList) {
+                val itemList = createRowsListFromSection(carContext, template.sections.first(), template.elementId, "FAAListTemplate", owningScreen)
+                val section = RowSection.Builder().setItems(itemList).build()
+                builder.addSection(section)
+            } else {
+                for (section in template.sections) {
+                    val itemList = createRowsListFromSection(carContext, section, template.elementId, "FAAListTemplate", owningScreen)
+                    val templateSection = RowSection.Builder()
+                    templateSection.setTitle(section.title)
+                    templateSection.setItems(itemList).build()
+                    builder.addSection(templateSection.build())
+                }
+            }
+        }
+
+        val headerBuilder = Header.Builder()
+        headerBuilder.setTitle(template.title)
+
+        template.endHeaderAction?.let { endHeaderAction ->
+            val headerActionBuilder = Action.Builder()
+                .setTitle(endHeaderAction.title)
+                .setOnClickListener {
+                    sendEvent(
+                        type = FAAChannelTypes.onHeaderActionPressed.name,
+                        data = mapOf("elementId" to endHeaderAction.elementId!!)
+                    )
+                }
+
+            val actionHeader =  headerActionBuilder.build()
+            headerBuilder.addEndHeaderAction(actionHeader)
+        }
+
+        if (addBackButton) headerBuilder.setStartHeaderAction(Action.BACK)
+        val header = headerBuilder.build()
+
+        template.action?.let { fabAction ->
+            val actionBuilder = Action.Builder()
+                .setBackgroundColor(CarColor.BLUE)
+                .setIcon(CarIcon.COMPOSE_MESSAGE)
+
+
+            val imageIcon = if (carContext != null && fabAction.imageUrl != null) {
+                resolveCarIcon(carContext, null, fabAction.imageUrl, fabAction.imageTint)
+            } else null
+
+            if(imageIcon != null) actionBuilder.setIcon(imageIcon)
+            if(fabAction.imageTint != null) {
+                actionBuilder.setBackgroundColor(fabAction.imageTint.toCarColor())
+            }
+
+
+            actionBuilder.setOnClickListener {
+                sendEvent(
+                    type = FAAChannelTypes.onTemplateFABPressed.name,
+                    data = mapOf("elementId" to fabAction.elementId!!)
+                )
+            }
+
+            val action = actionBuilder.build()
+            builder.addAction(action)
+        }
+
+
+        builder.setHeader(header)
+
+
+        return builder.build()
+    }
+
+    @ExperimentalCarApi
+    private suspend fun getGridAsSectionedItemTemplate(
+        data: Map<String, Any?>,
+        addBackButton: Boolean = true,
+        owningScreen: Screen? = null,
+    ): Template {
+        val carContext = AndroidAutoService.session?.carContext
+        val template = FAAGridTemplate.fromJson(data)
+        val builder = SectionedItemTemplate.Builder()
+        val emptyMessage: String? = template.emptyViewTitleVariants.firstOrNull()
+
+        if (template.buttons.isEmpty()) {
+            if (emptyMessage != null) {
+                builder.setLoading(false)
+                val section = GridSection.Builder().setNoItemsMessage(emptyMessage).build()
+                builder.addSection(section)
+            } else {
+                builder.setLoading(true)
+            }
+        } else {
+            builder.setLoading(false)
+            val itemList = mutableListOf<GridItem>()
+            for (button in template.buttons) {
+                itemList.add(
+                    createGridItemFromButton(carContext, button, template.elementId, "FAAGridTemplate", owningScreen)
+                )
+            }
+            val section = GridSection.Builder().setItems(itemList).build()
+            builder.addSection(section)
+        }
+
+        val headerBuilder = Header.Builder()
+        headerBuilder.setTitle(template.title)
+
+        if (addBackButton) headerBuilder.setStartHeaderAction(Action.BACK)
+        val header = headerBuilder.build()
+
+        builder.setHeader(header)
+
+
+        return builder.build()
+    }
+
+
+    // Needs to be tested!!
+    @ExperimentalCarApi
+    private fun getMediaPlaybackTemplate(
+        data: Map<String, Any?>,
+        addBackButton: Boolean = true,
+        owningScreen: Screen? = null,
+    ): Template {
+        val carContext = AndroidAutoService.session?.carContext
+        val template = FAAGridTemplate.fromJson(data)
+        val builder = MediaPlaybackTemplate.Builder()
+        val emptyMessage: String? = template.emptyViewTitleVariants.firstOrNull()
+
+        val headerBuilder = Header.Builder()
+        headerBuilder.setTitle(template.title)
+
+        if (addBackButton) headerBuilder.setStartHeaderAction(Action.BACK)
+        val header = headerBuilder.build()
+
+        builder.setHeader(header)
+
+
+        return builder.build()
+    }
+
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         FlutterAndroidAutoPlugin.events = events

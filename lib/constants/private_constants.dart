@@ -63,4 +63,10 @@ enum FAAChannelTypes {
   onGridButtonSelectedComplete,
   updateMessageTemplate,
   updateLongMessageTemplate,
+  showToast,
+  onListItemActionPressed,
+  getContentLimit,
+  onTemplateFABPressed,
+  onHeaderActionPressed,
+  onAndroidAutoLifecycleChange,
 }

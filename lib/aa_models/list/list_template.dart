@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../sectioned_item/sectioned_item_template.dart';
 import '../template.dart';
 import 'list_section.dart';
 
@@ -32,6 +33,12 @@ class AAListTemplate implements AATemplate {
   /// Takes precedence over [systemIcon] when set.
   final String? iconUrl;
 
+  /// Sets a template scoped action outside the rows (FAB).
+  final AAActionItem? action;
+
+  /// Sets a template scoped action in the end of header.
+  final AAActionItem? endHeaderAction;
+
   AAListTemplate({
     required this.title,
     required this.sections,
@@ -39,6 +46,8 @@ class AAListTemplate implements AATemplate {
     this.tabTitle,
     this.systemIcon,
     this.iconUrl,
+    this.action,
+    this.endHeaderAction,
     String? id,
   }) : assert(
          _hasValidSelectableList(sections),
@@ -71,16 +80,17 @@ class AAListTemplate implements AATemplate {
 
   @override
   Map<String, dynamic> toJson() => {
-    '_elementId': _elementId,
-    'title': title,
-    'sections': sections
-        .map((AAListSection section) => section.toJson())
-        .toList(),
-    'emptyViewTitleVariants': emptyViewTitleVariants,
-    'tabTitle': tabTitle,
-    'systemIcon': systemIcon,
-    'iconUrl': iconUrl,
-  };
+        '_elementId': _elementId,
+        'title': title,
+        'sections':
+            sections.map((AAListSection section) => section.toJson()).toList(),
+        'emptyViewTitleVariants': emptyViewTitleVariants,
+        'tabTitle': tabTitle,
+        'systemIcon': systemIcon,
+        'iconUrl': iconUrl,
+        'action': action?.toJson(),
+        'endHeaderAction': endHeaderAction?.toJson(),
+      };
 
   void updateSections(List<AAListSection> newSections) {
     _validateSelectableList(newSections);

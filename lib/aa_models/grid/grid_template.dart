@@ -41,6 +41,8 @@ class AAGridTemplate implements AATemplate {
   /// Takes precedence over [systemIcon] when both are set.
   final String? iconUrl;
 
+  final bool? useNew;
+
   AAGridTemplate({
     required this.title,
     required this.buttons,
@@ -48,6 +50,7 @@ class AAGridTemplate implements AATemplate {
     this.tabTitle,
     this.systemIcon,
     this.iconUrl,
+    this.useNew = false,
   }) : _elementId = const Uuid().v4();
 
   @override
@@ -55,12 +58,13 @@ class AAGridTemplate implements AATemplate {
 
   @override
   Map<String, dynamic> toJson() => {
-    '_elementId': _elementId,
-    'title': title,
-    'buttons': buttons.map((b) => b.toJson()).toList(),
-    'emptyViewTitleVariants': emptyViewTitleVariants,
-    'tabTitle': tabTitle,
-    'systemIcon': systemIcon,
-    'iconUrl': iconUrl,
-  };
+        '_elementId': _elementId,
+        'title': title,
+        'buttons': buttons.map((b) => b.toJson()).toList(),
+        'emptyViewTitleVariants': emptyViewTitleVariants,
+        'tabTitle': tabTitle,
+        'systemIcon': systemIcon,
+        'iconUrl': iconUrl,
+        'useNew': useNew ?? false,
+      };
 }

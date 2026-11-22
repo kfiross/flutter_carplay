@@ -5,7 +5,8 @@ import 'package:uuid/uuid.dart';
 /// - [normal] — default appearance, no background color applied.
 /// - [cancel] — no native equivalent in the Car App Library; renders the same as [normal].
 /// - [destructive] — renders with a red background (`CarColor.RED`).
-enum AAAlertActionStyle { normal, cancel, destructive }
+/// - [primary] — renders with a blue background (`CarColor.PRIMARY`).
+enum AAAlertActionStyle { normal, cancel, destructive, primary }
 
 /// An action that can be performed from an [AAAlertTemplate] on Android Auto.
 class AAAlertAction {

@@ -37,8 +37,9 @@ class AAGridButton {
     this.image,
     this.loadingMessage,
     this.onPress,
-  }) : assert(titleVariants.isNotEmpty, 'titleVariants must not be empty'),
-       _elementId = const Uuid().v4();
+    String? elementId,    // for stable ID
+  })  : assert(titleVariants.isNotEmpty, 'titleVariants must not be empty'),
+        _elementId = elementId ?? const Uuid().v4();
 
   String get uniqueId => _elementId;
 

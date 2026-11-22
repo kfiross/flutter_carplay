@@ -16,6 +16,10 @@ class AndroidAutoSession : Session() {
                 FlutterAndroidAutoPlugin.onAndroidAutoConnectionChange(
                     FAAConnectionTypes.connected
                 )
+                FlutterAndroidAutoPlugin.onAndroidAutoLifecycleChange(
+                    FAALifecycleStateTypes.onStart
+                )
+
                 super.onStart(owner)
             }
 
@@ -24,12 +28,18 @@ class AndroidAutoSession : Session() {
                 FlutterAndroidAutoPlugin.onAndroidAutoConnectionChange(
                     FAAConnectionTypes.connected
                 )
+                FlutterAndroidAutoPlugin.onAndroidAutoLifecycleChange(
+                    FAALifecycleStateTypes.onResume
+                )
                 super.onResume(owner)
             }
 
             override fun onStop(owner: LifecycleOwner) {
                 FlutterAndroidAutoPlugin.onAndroidAutoConnectionChange(
                     FAAConnectionTypes.disconnected
+                )
+                FlutterAndroidAutoPlugin.onAndroidAutoLifecycleChange(
+                    FAALifecycleStateTypes.onStop
                 )
                 super.onStop(owner)
             }

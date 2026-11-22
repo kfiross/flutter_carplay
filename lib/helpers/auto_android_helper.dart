@@ -1,3 +1,4 @@
+import 'package:flutter_carplay/aa_models/sectioned_item/sectioned_item_template.dart';
 import 'package:flutter_carplay/flutter_carplay.dart';
 
 class FlutterAutoAndroidHelper {
@@ -38,8 +39,10 @@ class FlutterAutoAndroidHelper {
     required String elementId,
   }) {
     for (final template in templates) {
+      print('_gridTemplates: template=${template.uniqueId} ');
       for (final gridTemplate in _gridTemplates(template)) {
         for (final button in gridTemplate.buttons) {
+          print('_gridTemplates: button.elId=${button.uniqueId} ');
           if (button.uniqueId == elementId) return button;
         }
       }
@@ -60,6 +63,39 @@ class FlutterAutoAndroidHelper {
     }
     return null;
   }
+
+  AAActionItem? findAAFabAction({
+    required List<AATemplate> templates,
+    required String elementId,
+  }) {
+    for (final template in templates) {
+      if (template is AAListTemplate) {
+        final action = template.action;
+        if (action?.uniqueId == elementId) return action;
+      }
+      if (template is AASectionedItemTemplate) {
+        for (final action in template.actions) {
+          if (action.uniqueId == elementId) return action;
+        }
+      }
+    }
+    return null;
+  }
+
+  AAActionItem? findAAHeaderAction({
+    required List<AATemplate> templates,
+    required String elementId,
+  }) {
+    for (final template in templates) {
+      if (template is AAListTemplate) {
+        final action = template.endHeaderAction;
+        if (action?.uniqueId == elementId) return action;
+      }
+    }
+    return null;
+  }
+
+
 
   Iterable<AAListTemplate> _listTemplates(AATemplate template) sync* {
     if (template is AAListTemplate) {

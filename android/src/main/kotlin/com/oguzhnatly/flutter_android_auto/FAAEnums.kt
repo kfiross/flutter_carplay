@@ -6,6 +6,13 @@ enum class FAAConnectionTypes {
     disconnected,
 }
 
+enum class FAALifecycleStateTypes {
+    onStart,
+    onResume,
+    onStop,
+}
+
+
 enum class FAAChannelTypes {
     onAndroidAutoConnectionChange,
     setRootTemplate,
@@ -31,4 +38,11 @@ enum class FAAChannelTypes {
     onGridButtonSelectedComplete,
     updateMessageTemplate,
     updateLongMessageTemplate,
+    showToast,
+    onListItemActionPressed,
+    getContentLimit,
+    onTemplateFABPressed,
+    onHeaderActionPressed,
+
+    onAndroidAutoLifecycleChange,
 }

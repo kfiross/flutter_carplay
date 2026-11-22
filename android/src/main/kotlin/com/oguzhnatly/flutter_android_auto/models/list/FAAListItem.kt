@@ -14,6 +14,9 @@ data class FAAListItem(
     val isBrowsable: Boolean? = null,
     val toggle: FAAToggle? = null,
     val isOnPressListenerActive: Boolean,
+    val numericDecoration: Int,
+    val trailingActionsButtons: List<FAAListItemAction> = emptyList(),
+    val subtitleSpans: List<FAAListItemSpannable> = emptyList(),
 ) {
     companion object {
         fun fromJson(map: Map<String, Any?>): FAAListItem {
@@ -33,6 +36,11 @@ data class FAAListItem(
                 entry.key.toString()
             }?.let { FAAToggle.fromJson(it) }
             val isOnPressListenerActive = map["onPress"] as? Boolean ?: false
+            val numericDecoration = map["numericDecoration"] as? Int ?: 0
+            val trailingActionsButtons = (map["trailingActionsButtons"] as? List<Map<String, Any?>>)
+                ?.map { FAAListItemAction.fromJson(it) }
+            val subtitleSpans = (map["subtitleSpans"] as? List<Map<String, Any?>>)
+                ?.map { FAAListItemSpannable.fromJson(it) }
 
             return FAAListItem(
                 elementId,
@@ -48,6 +56,9 @@ data class FAAListItem(
                 isBrowsable,
                 toggle,
                 isOnPressListenerActive,
+                numericDecoration,
+                trailingActionsButtons ?: emptyList(),
+                subtitleSpans ?: emptyList(),
             )
         }
     }
@@ -67,6 +78,49 @@ data class FAAToggle(
 
             return FAAToggle(
                 isChecked, isEnabled, isOnCheckedChangeListenerActive
+            )
+        }
+    }
+}
+
+
+data class FAAListItemAction(
+    val image: String? = null,
+    val callbackId: String? = null,
+    val text: String? = null
+) {
+    companion object {
+        fun fromJson(map: Map<String, Any?>): FAAListItemAction {
+            val image = map["image"] as? String
+
+            val text = map["text"] as? String
+
+            val callbackId = map["callbackId"] as? String
+
+            return FAAListItemAction(
+                image,
+                callbackId,
+                text
+            )
+        }
+    }
+}
+
+data class FAAListItemSpannable(
+    val color: FAAImageTint? = null,
+    val start: Int? = 0,
+    val end: Int? = null,
+) {
+    companion object {
+        fun fromJson(map: Map<String, Any?>): FAAListItemSpannable {
+            val color = FAAImageTint.fromJson(map["color"] as Map<String, Any?>)
+            val start = map["start"] as? Int ?: 0
+            val end = map["end"] as? Int
+
+            return FAAListItemSpannable(
+                color,
+                start,
+                end
             )
         }
     }

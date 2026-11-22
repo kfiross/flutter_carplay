@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_carplay/aa_models/sectioned_item/sectioned_item_template.dart';
 import 'package:flutter_carplay/constants/private_constants.dart';
 
 import '../aa_models/alert/alert_action.dart';
@@ -40,19 +41,19 @@ class FlutterAndroidAutoController {
 
   EventChannel get eventChannel => _eventChannel;
 
-  Future<bool?> flutterToNativeModule(
+  Future<T?> flutterToNativeModule<T>(
     FAAChannelTypes type, [
     dynamic data,
   ]) async {
-    return FlutterAndroidAutoController.flutterToNativeModuleStatic(type, data);
+    return FlutterAndroidAutoController.flutterToNativeModuleStatic<T>(type, data);
   }
 
-  static Future<bool?> flutterToNativeModuleStatic(
+  static Future<T?> flutterToNativeModuleStatic<T>(
     FAAChannelTypes type, [
     dynamic data,
   ]) async {
     await resolveSvgInPayload(data, size: FlutterAndroidAuto.svgRasterSize);
-    final bool? value = await _methodChannel.invokeMethod<bool>(
+    final T? value = await _methodChannel.invokeMethod<T>(
       type.name,
       data,
     );
@@ -111,7 +112,10 @@ class FlutterAndroidAutoController {
       templates: templateHistory,
       elementId: elementId,
     );
-    if (item == null) return;
+    if (item == null) {
+      print('processFAAGridButtonPressed: element with Id=$elementId was NOT found');
+      return;
+    }
 
     Future<void> complete() async {
       await flutterToNativeModule(
@@ -183,5 +187,44 @@ class FlutterAndroidAutoController {
       template.onPresent!(completed);
     }
     if (!completed) currentPresentTemplate = null;
+  }
+
+  Future<void> processFAAListItemActionPressed(String elementId, String actionId) async {
+    final AAListItem? item = _androidAutoHelper.findAAListItem(
+      templates: templateHistory,
+      elementId: elementId,
+    );
+
+    if (item == null) return;
+
+    final AAListItemAction? action =
+    item.trailingActionsButtons.cast<AAListItemAction?>().firstWhere(
+          (action) => action?.id == actionId,
+      orElse: () => null,
+    );
+
+    action?.onPress?.call();
+  }
+
+  Future<void> processFAAFabIconPressed(String elementId) async {
+    final AAActionItem? item = _androidAutoHelper.findAAFabAction(
+      templates: templateHistory,
+      elementId: elementId,
+    );
+
+    if (item == null) return;
+
+    item.onPress();
+  }
+
+  Future<void> processFAAHeaderActionPressed(String elementId) async {
+    final AAActionItem? item = _androidAutoHelper.findAAHeaderAction(
+      templates: templateHistory,
+      elementId: elementId,
+    );
+
+    if (item == null) return;
+
+    item.onPress();
   }
 }

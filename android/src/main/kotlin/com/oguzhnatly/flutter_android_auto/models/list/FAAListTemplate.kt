@@ -5,6 +5,8 @@ data class FAAListTemplate(
     val title: String,
     val sections: List<FAAListSection>,
     val emptyViewTitleVariants: List<String>,
+    val action: FAATemplateFABActionItem? = null,
+    val endHeaderAction: FAATemplateHeaderActionItem? = null,
 ) {
     init {
         val hasSelectableList = sections.any { it.isSelectable }
@@ -20,12 +22,14 @@ data class FAAListTemplate(
             val title = map["title"] as? String ?: ""
             val sections = (map["sections"] as? List<*>)?.mapNotNull {
                 (it as? Map<*, *>)?.mapKeys { entry -> entry.key.toString() }
-                    ?.let { FAAListSection.fromJson(it) }
+                    ?.let { FAAListSection.Companion.fromJson(it) }
             } ?: emptyList()
             val emptyViewTitleVariants = (map["emptyViewTitleVariants"] as? List<*>)
                 ?.filterIsInstance<String>() ?: emptyList()
+            val action = FAATemplateFABActionItem.fromJson(map["action"] as? Map<String, Any?>)
+            val endHeaderAction = FAATemplateHeaderActionItem.fromJson(map["endHeaderAction"] as? Map<String, Any?>)
 
-            return FAAListTemplate(elementId, title, sections, emptyViewTitleVariants)
+            return FAAListTemplate(elementId, title, sections, emptyViewTitleVariants, action, endHeaderAction)
         }
     }
 }

@@ -23,6 +23,9 @@ class AAAlertTemplate implements AATemplate {
   /// The action buttons available on the alert.
   final List<AAAlertAction> actions;
 
+  /// If the Alert has a "back" arrow button
+  final bool? addBackButton;
+
   /// Called when the alert finishes presenting.
   /// [completed] is true when the alert was shown successfully.
   final Function(bool completed)? onPresent;
@@ -32,6 +35,7 @@ class AAAlertTemplate implements AATemplate {
     this.message,
     required this.actions,
     this.onPresent,
+    this.addBackButton,
     String? id,
   }) : _elementId = id ?? const Uuid().v4();
 
@@ -40,10 +44,11 @@ class AAAlertTemplate implements AATemplate {
 
   @override
   Map<String, dynamic> toJson() => {
-    '_elementId': _elementId,
-    'title': title,
-    'message': message,
-    'actions': actions.map((e) => e.toJson()).toList(),
-    'onPresent': onPresent != null,
-  };
+        '_elementId': _elementId,
+        'title': title,
+        'message': message,
+        'actions': actions.map((e) => e.toJson()).toList(),
+        'onPresent': onPresent != null,
+        'addBackButton': addBackButton,
+      };
 }

@@ -2,6 +2,7 @@ package com.oguzhnatly.flutter_android_auto
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.car.app.model.CarIcon
 import androidx.core.graphics.drawable.IconCompat
 import io.flutter.FlutterInjector
@@ -10,6 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.FileNotFoundException
 
 object FAAHelpers {
     fun makeFCPChannelId(event: String): String {
@@ -39,15 +41,25 @@ suspend fun loadCarImageFromAsset(
 ): CarIcon? {
     return withContext(Dispatchers.IO) {
         try {
+
             val key = FlutterInjector.instance().flutterLoader()
-                .getLookupKeyForAsset(assetPath)
+                .getLookupKeyForAsset(assetPath.trim().removePrefix("/"))
+
+            Log.d("FLutterAndroidAutoPlgin", "key = $key")
+
             context.assets.open(key).use { inputStream ->
                 val bitmap = BitmapFactory.decodeStream(inputStream) ?: return@use null
                 bitmap.toCarIcon(imageTint)
             }
-        } catch (e: Exception) {
+        }
+        catch (e: FileNotFoundException) {
+            Log.d("FLutterAndroidAutoPlgin", "Asset not found!! filename: $assetPath")
+            return@withContext null
+        }
+        catch (e: Exception) {
+            Log.d("FLutterAndroidAutoPlgin", e.toString())
             e.printStackTrace()
-            null
+            return@withContext null
         }
     }
 }
@@ -55,18 +67,21 @@ suspend fun loadCarImageFromAsset(
 suspend fun loadCarImageFromFile(
     path: String,
     imageTint: FAAImageTint? = null,
-): CarIcon? {
-    return withContext(Dispatchers.IO) {
-        try {
-            val filePath = path.removePrefix("file://")
-            val file = File(filePath)
-            if (!file.exists()) return@withContext null
-            val bitmap = BitmapFactory.decodeFile(filePath) ?: return@withContext null
-            bitmap.toCarIcon(imageTint)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
+): CarIcon? = withContext(Dispatchers.IO) {
+    try {
+        val file = File(path.removePrefix("file://"))
+
+        if (!file.exists() || !file.isFile || !file.canRead()) {
+            return@withContext null
         }
+
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+            ?: return@withContext null
+
+        bitmap.toCarIcon(imageTint)
+    } catch (e: Exception) {
+        Log.e("FlutterAndroidAuto", "Failed to load image: $path", e)
+        null
     }
 }
 
